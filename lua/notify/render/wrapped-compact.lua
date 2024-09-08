@@ -14,7 +14,7 @@ local function split_length(line, width)
     if #line == 0 then
       return text
     end
-    next_line, line = line:sub(1, width), line:sub(width)
+    next_line, line = line:sub(1, width), line:sub(width + 1)
     text[#text + 1] = next_line
   end
 end
@@ -42,48 +42,34 @@ return function(bufnr, notif, highlights, config)
   local namespace = require("notify.render.base").namespace()
   local icon = notif.icon
   local title = notif.title[1]
-  local prefix
-
-  -- wrap the text & add spacing
-  local max_width = config.max_width()
-  if max_width == nil then
-    max_width = 80
-  end
-  local message = custom_wrap(notif.message, max_width)
+  local message = notif.message
 
   local default_titles = { "Error", "Warning", "Notify" }
-  local has_valid_manual_title = type(title) == "string"
+  local has_title = type(title) == "string"
     and #title > 0
     and not vim.tbl_contains(default_titles, title)
 
-  if has_valid_manual_title then
-    -- has title = icon + title as header row
-    prefix = string.format(" %s %s", icon, title)
-    table.insert(message, 1, prefix)
-  else
-    -- no title = prefix the icon
-    prefix = string.format(" %s", icon)
-    message[1] = string.format("%s %s", prefix, message[1])
+  if not has_title then
+    -- no title = inline the icon
+    message[1] = string.format("%s %s", icon, message[1])
   end
+  -- has title = icon + title as header row
 
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, message)
+  message = custom_wrap(notif.message, config.max_width() or 80)
 
-  local icon_length = vim.str_utfindex(icon)
-  local prefix_length = vim.str_utfindex(prefix) + 1
+  vim.api.nvim_buf_set_lines(bufnr, has_title and 1 or 0, -1, false, message)
 
   vim.api.nvim_buf_set_extmark(bufnr, namespace, 0, 0, {
-    hl_group = highlights.icon,
-    end_col = icon_length + 1,
-    priority = 50,
-  })
-  vim.api.nvim_buf_set_extmark(bufnr, namespace, 0, icon_length + 1, {
-    hl_group = highlights.title,
-    end_col = prefix_length + 1,
-    priority = 50,
-  })
-  vim.api.nvim_buf_set_extmark(bufnr, namespace, 0, prefix_length + 1, {
     hl_group = highlights.body,
     end_line = #message,
-    priority = 50,
+  })
+  vim.api.nvim_buf_set_extmark(bufnr, namespace, 0, 0, {
+    virt_text = {
+      { " " },
+      { icon, highlights.icon },
+      { " " },
+      { title, highlights.title },
+    },
+    virt_text_pos = "overlay",
   })
 end
